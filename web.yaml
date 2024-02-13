@@ -1,0 +1,72 @@
+version: '3.8'
+services:
+  proxy:
+    image: dockercloud/haproxy
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - "8080:8080"
+    networks:
+      - project
+    deploy:
+      mode: global
+      placement:
+        constraints: [node.role == manager]
+        #    depends_on:
+        #      - web
+        #   - nodejs
+
+  web:
+    image: walloonam/my-nginx-image:v1
+    volumes:
+      - web:/usr/share/nginx/html
+    ports:
+      - "80:80"
+    expose:
+      - 8080
+    depends_on:
+      - nodejs
+    deploy:
+      replicas: 3
+      placement:
+        constraints:
+          - node.labels.app == web
+    networks:
+      - project
+
+  nodejs:
+    image: walloonam/my-nodejs-app:v2
+    ports:
+      - "30000:3000"
+    environment:
+      - MYSQL_HOST=211.183.3.100
+      - MYSQL_USER=root
+      - MYSQL_PASSWORD=test123
+      - MYSQL_DATABASE=mydb
+    deploy:
+      replicas: 3
+      placement:
+        constraints:
+          - node.labels.app == web
+    networks:
+      - project
+
+
+volumes:
+  web:
+    driver: local
+    driver_opts:
+      type: nfs
+      o: addr=211.183.3.99,rw,nolock,hard
+      device: ":/home/user1/volume/web"
+  db:
+    driver: local
+    driver_opts:
+      type: nfs
+      o: addr=211.183.3.99,rw,nolock,hard
+      device: ":/home/user1/volume/db"
+
+
+networks:
+  project:
+    external: true

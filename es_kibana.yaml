@@ -1,0 +1,86 @@
+version: '3.7'
+services:
+  es:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.17.7
+    environment:
+      - node.name=single
+      - cluster.name=standalone
+      - discovery.type=single-node
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    ports:
+      - 9200:9200
+    networks:
+      - project
+    deploy:
+      mode: global
+      placement:
+        constraints: [node.role == manager]
+      restart_policy:
+        condition: on-failure
+        max_attempts: 3
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:7.17.7
+    ports:
+      - 5601:5601
+    environment:
+      - ELASTICSEARCH_HOSTS=["http://211.183.3.100:9200"]
+    depends_on:
+      - es
+    networks:
+      - project
+    deploy:
+      mode: global
+      placement:
+        constraints: [node.role == manager]
+      restart_policy:
+        condition: on-failure
+        max_attempts: 3
+
+  metricbeat:
+    image: docker.elastic.co/beats/metricbeat:7.17.7
+    user: root
+    depends_on:
+      - kibana
+    networks:
+      - project
+    configs:
+      - source: mb_config
+        target: /usr/share/metricbeat/metricbeat.yml
+    volumes:
+      - metricbeat:/usr/share/metricbeat/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - ELASTICSEARCH_HOST=es
+      - KIBANA_HOST=kibana
+      - ELASTICSEARCH_USERNAME="elastic"
+      - ELASTICSEARCH_PASSWORD="changeme"
+    deploy:
+      mode: global
+      placement:
+        constraints: [node.labels.app == web]
+
+volumes:
+  es_data:
+    driver: local
+    driver_opts:
+      type: nfs
+      o: addr=211.183.3.99,rw,nolock,hard
+      device: ":/volume/es"
+
+  metricbeat:
+    driver: local
+    driver_opts:
+      type: nfs
+      o: addr=211.183.3.99,rw,nolock,hard
+      device: ":/volume/metricbeat"
+
+
+configs:
+  mb_config:
+    file: /home/user1/project2/metricbeat.yml
+
+networks:
+  project:
+    external: true
